@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Text Diff Checker // text-diff-checker.slippylabs.com</title>
+<meta name="description" content="Paste two blocks of text and see every added or removed line highlighted at a glance. Runs entirely in your browser.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Ccircle%20cx%3D%2232%22%20cy%3D%2234%22%20r%3D%2222%22%20fill%3D%22%231c8a52%22%20stroke%3D%22%2339ff8f%22%20stroke-width%3D%222%22%2F%3E%3Ccircle%20cx%3D%2220%22%20cy%3D%2216%22%20r%3D%228%22%20fill%3D%22%231c8a52%22%20stroke%3D%22%2339ff8f%22%20stroke-width%3D%222%22%2F%3E%3Ccircle%20cx%3D%2244%22%20cy%3D%2216%22%20r%3D%228%22%20fill%3D%22%231c8a52%22%20stroke%3D%22%2339ff8f%22%20stroke-width%3D%222%22%2F%3E%3C%2Fsvg%3E">
+<meta name="theme-color" content="#050b10">
+<link rel="stylesheet" href="style.css?v=5">
+</head>
+<body>
+
+<div class="starfield"></div>
+<div class="scanlines"></div>
+
+<main class="page-wrap">
+  <div class="hud-panel xwide">
+    <div class="corner tl"></div>
+    <div class="corner tr"></div>
+    <div class="corner bl"></div>
+    <div class="corner br"></div>
+
+    <div class="callsign-row">
+      <div class="toad-avatar-wrap">
+        <svg class="toad-avatar" width="46" height="46" viewBox="0 0 64 64">
+          <circle cx="32" cy="34" r="22" fill="#1c8a52" stroke="#39ff8f" stroke-width="2"/>
+          <circle cx="20" cy="16" r="8" fill="#1c8a52" stroke="#39ff8f" stroke-width="2"/>
+          <circle cx="44" cy="16" r="8" fill="#1c8a52" stroke="#39ff8f" stroke-width="2"/>
+          <circle cx="20" cy="16" r="3.5" fill="#050b10"/>
+          <circle cx="44" cy="16" r="3.5" fill="#050b10"/>
+          <ellipse cx="24" cy="32" rx="4.5" ry="5.5" fill="#050b10"/>
+          <ellipse cx="40" cy="32" rx="4.5" ry="5.5" fill="#050b10"/>
+          <circle cx="24" cy="30" r="1.4" fill="#39ff8f"/>
+          <circle cx="40" cy="30" r="1.4" fill="#39ff8f"/>
+          <path d="M22 42 Q32 48 42 42" stroke="#050b10" stroke-width="2" fill="none" stroke-linecap="round"/>
+        </svg>
+        <div class="lock-reticle"></div>
+      </div>
+      <span class="callsign">Workshop Division // Tool</span>
+      <div class="nav-links">
+        <a href="https://projects.slippylabs.com/" class="logout-link">← Archive</a>
+      </div>
+    </div>
+
+    <h1>TEXT DIFF CHECKER</h1>
+    <p class="subtitle">Paste two blocks of text below and compare — added lines are green, removed lines are red.</p>
+
+    <div class="two-col">
+      <div class="tool-field-row">
+        <label class="tool-field-label" for="text-a">Original</label>
+        <textarea class="tool-textarea" id="text-a" spellcheck="false" placeholder="Paste the original text here…"></textarea>
+      </div>
+      <div class="tool-field-row">
+        <label class="tool-field-label" for="text-b">Changed</label>
+        <textarea class="tool-textarea" id="text-b" spellcheck="false" placeholder="Paste the changed text here…"></textarea>
+      </div>
+    </div>
+
+    <div class="tool-controls">
+      <button class="tool-btn" id="compare-btn">Compare</button>
+      <span class="tool-note" id="diff-summary" style="margin:0;"></span>
+    </div>
+
+    <div class="diff-output" id="diff-output"></div>
+
+    <div class="comm-window">
+      <div class="comm-portrait">
+        <svg width="36" height="36" viewBox="0 0 64 64">
+          <circle cx="32" cy="34" r="22" fill="#1c8a52" stroke="#39ff8f" stroke-width="2"/>
+          <circle cx="20" cy="16" r="8" fill="#1c8a52" stroke="#39ff8f" stroke-width="2"/>
+          <circle cx="44" cy="16" r="8" fill="#1c8a52" stroke="#39ff8f" stroke-width="2"/>
+          <circle cx="20" cy="16" r="3.5" fill="#050b10"/>
+          <circle cx="44" cy="16" r="3.5" fill="#050b10"/>
+          <ellipse cx="24" cy="32" rx="4.5" ry="5.5" fill="#050b10"/>
+          <ellipse cx="40" cy="32" rx="4.5" ry="5.5" fill="#050b10"/>
+          <circle cx="24" cy="30" r="1.4" fill="#39ff8f"/>
+          <circle cx="40" cy="30" r="1.4" fill="#39ff8f"/>
+          <path d="M22 42 Q32 48 42 42" stroke="#050b10" stroke-width="2" fill="none" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="comm-body">
+        <div class="comm-label"><span class="dot"></span> Incoming Transmission &mdash; Slippy</div>
+        <p>"Nothing you paste here ever leaves this tab."</p>
+      </div>
+    </div>
+
+    <a href="https://projects.slippylabs.com/" class="hud-btn">← Back to Archive</a>
+  </div>
+</main>
+
+<script>
+const textA = document.getElementById('text-a');
+const textB = document.getElementById('text-b');
+const diffOutput = document.getElementById('diff-output');
+const diffSummary = document.getElementById('diff-summary');
+
+const MAX_CELLS = 4000000;
+
+function diffLines(a, b) {
+  const linesA = a.split('\n');
+  const linesB = b.split('\n');
+  const n = linesA.length, m = linesB.length;
+
+  if (n * m > MAX_CELLS) return null;
+
+  const dp = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = linesA[i] === linesB[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+
+  const result = [];
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (linesA[i] === linesB[j]) { result.push({ type: 'same', text: linesA[i] }); i++; j++; }
+    else if (dp[i + 1][j] >= dp[i][j + 1]) { result.push({ type: 'removed', text: linesA[i] }); i++; }
+    else { result.push({ type: 'added', text: linesB[j] }); j++; }
+  }
+  while (i < n) { result.push({ type: 'removed', text: linesA[i] }); i++; }
+  while (j < m) { result.push({ type: 'added', text: linesB[j] }); j++; }
+  return result;
+}
+
+const MARKERS = { added: '+', removed: '-', same: ' ' };
+
+function renderDiff() {
+  const diff = diffLines(textA.value, textB.value);
+  diffOutput.innerHTML = '';
+
+  if (diff === null) {
+    diffSummary.textContent = 'Too large to diff in-browser — try a smaller excerpt.';
+    return;
+  }
+
+  let added = 0, removed = 0;
+  const frag = document.createDocumentFragment();
+  diff.forEach(line => {
+    if (line.type === 'added') added++;
+    if (line.type === 'removed') removed++;
+    const row = document.createElement('div');
+    row.className = 'diff-line ' + line.type;
+    const marker = document.createElement('span');
+    marker.className = 'diff-marker';
+    marker.textContent = MARKERS[line.type];
+    row.appendChild(marker);
+    row.appendChild(document.createTextNode(line.text));
+    frag.appendChild(row);
+  });
+  diffOutput.appendChild(frag);
+  diffSummary.textContent = (added || removed) ? `+${added} / -${removed}` : 'No differences.';
+}
+
+document.getElementById('compare-btn').addEventListener('click', renderDiff);
+renderDiff();
+</script>
+</body>
+</html>
